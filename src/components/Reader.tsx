@@ -1,0 +1,170 @@
+"use client";
+
+import { Fragment, useCallback, useEffect, useMemo, useState, type MouseEvent } from "react";
+import type { Definition } from "@/lib/dictionary";
+import { readerId } from "@/lib/preferences";
+
+type Active = { word: string; key: string; context: string };
+type Lookup = { state: "loading" } | { state: "missing" } | { state: "error" } | { state: "ok"; def: Definition };
+
+const WORD = /([A-Za-z]+(?:['’][A-Za-z]+)?)/;
+
+function sentenceAround(text: string, word: string) {
+  const sentences = text.match(/[^.!?]+[.!?]*/g) ?? [text];
+  return (sentences.find((s) => s.includes(word)) ?? text).trim().slice(0, 600);
+}
+
+function Paragraph({ text, index, activeKey }: { text: string; index: number; activeKey: string | null }) {
+  // Odd entries are words; even entries are the spaces and punctuation between them.
+  const parts = useMemo(() => text.split(WORD), [text]);
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (i % 2 === 0) return <Fragment key={i}>{part}</Fragment>;
+        const key = `${index}:${i}`;
+        return (
+          <span key={i} data-key={key} data-block={index} className={key === activeKey ? "word word-active" : "word"}>
+            {part}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+export default function Reader({ blocks, articleId }: { blocks: string[]; articleId: number }) {
+  const [active, setActive] = useState<Active | null>(null);
+  const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [saved, setSaved] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    fetch("/api/words", { headers: { "X-Reader-Id": readerId() } })
+      .then((r) => (r.ok ? r.json() : { words: [] }))
+      .then((d: { words: { word: string }[] }) => setSaved(new Set(d.words.map((w) => w.word))))
+      .catch(() => {});
+  }, []);
+
+  const close = useCallback(() => {
+    setActive(null);
+    setLookup(null);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+
+  const onTap = async (e: MouseEvent<HTMLDivElement>) => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>("[data-key]");
+    if (!el) return;
+    const word = el.textContent ?? "";
+    const key = el.dataset.key!;
+    if (active?.key === key) return close();
+    const context = sentenceAround(blocks[Number(el.dataset.block)].replace(/^(## |\^\^ )/, ""), word);
+    setActive({ word, key, context });
+    setLookup({ state: "loading" });
+    try {
+      const res = await fetch(`/api/define?word=${encodeURIComponent(word)}`);
+      if (res.status === 404) return setLookup({ state: "missing" });
+      if (!res.ok) throw new Error();
+      setLookup({ state: "ok", def: (await res.json()) as Definition });
+    } catch {
+      setLookup({ state: "error" });
+    }
+  };
+
+  const save = async (def: Definition) => {
+    const firstDefinition = def.meanings[0]?.definitions[0]?.definition;
+    setSaved((s) => new Set(s).add(def.word));
+    const res = await fetch("/api/words", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Reader-Id": readerId() },
+      body: JSON.stringify({ word: def.word, definition: firstDefinition, context: active?.context, articleId }),
+    }).catch(() => null);
+    if (!res?.ok) setSaved((s) => { const n = new Set(s); n.delete(def.word); return n; });
+  };
+
+  return (
+    <>
+      <div onClick={onTap} className="article-body">
+        {blocks.map((block, i) => {
+          if (block.startsWith("## ")) {
+            return <h2 key={i} className="mt-14 font-serif text-2xl leading-snug sm:text-[1.7rem]"><Paragraph text={block.slice(3)} index={i} activeKey={active?.key ?? null} /></h2>;
+          }
+          if (block.startsWith("^^ ")) {
+            return <p key={i} className="mt-6 text-xs italic leading-relaxed text-ink-faint">{block.slice(3)}</p>;
+          }
+          return (
+            <p key={i} className={`mt-7 text-[1.13rem] font-light leading-[1.85] text-ink ${i === 0 ? "first-letter:float-left first-letter:mr-3 first-letter:mt-1 first-letter:font-serif first-letter:text-[4.2rem] first-letter:leading-[0.85] first-letter:text-gold-deep" : ""}`}>
+              <Paragraph text={block} index={i} activeKey={active?.key ?? null} />
+            </p>
+          );
+        })}
+      </div>
+
+      {active && lookup && (
+        <aside
+          role="dialog"
+          aria-label={`Definition of ${active.word}`}
+          className="fixed inset-x-0 bottom-0 z-20 max-h-[60vh] overflow-y-auto border-t border-ink bg-paper px-6 pb-8 pt-6 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:w-[24rem] sm:border"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="eyebrow">Definition</p>
+              <h3 className="mt-2 font-serif text-4xl">{lookup.state === "ok" ? lookup.def.word : active.word.toLowerCase()}</h3>
+              {lookup.state === "ok" && (lookup.def.phonetic || lookup.def.audio) && (
+                <p className="mt-2 flex items-center gap-3 text-sm text-ink-soft">
+                  {lookup.def.phonetic}
+                  {lookup.def.audio && (
+                    <button
+                      onClick={() => new Audio(lookup.def.audio!).play().catch(() => {})}
+                      className="text-[0.68rem] uppercase tracking-eyebrow text-gold-deep hover:text-ink"
+                    >
+                      ▸ Listen
+                    </button>
+                  )}
+                </p>
+              )}
+            </div>
+            <button onClick={close} aria-label="Close" className="text-xl leading-none text-ink-faint hover:text-ink">×</button>
+          </div>
+
+          {lookup.state === "ok" && (
+            <div className="mt-5 flex items-center justify-between">
+              {saved.has(lookup.def.word) ? (
+                <span className="text-[0.7rem] uppercase tracking-eyebrow text-gold-deep">✓ In your words</span>
+              ) : (
+                <button onClick={() => save(lookup.def)} className="btn px-5 py-2.5">Keep this word</button>
+              )}
+              <a href="/words" className="btn-quiet">My words</a>
+            </div>
+          )}
+
+          <div className="mt-5 border-t hairline pt-5 text-[0.95rem] leading-relaxed">
+            {lookup.state === "loading" && <p className="font-light text-ink-faint">Looking it up…</p>}
+            {lookup.state === "missing" && <p className="font-light text-ink-soft">No dictionary entry for this word — it may be a name or a rare form.</p>}
+            {lookup.state === "error" && <p className="font-light text-ink-soft">The dictionary is unavailable just now. Please try again.</p>}
+            {lookup.state === "ok" && (
+              <ol className="space-y-5">
+                {lookup.def.meanings.map((m) => (
+                  <li key={m.partOfSpeech}>
+                    <p className="text-[0.66rem] uppercase tracking-eyebrow text-ink-faint">{m.partOfSpeech}</p>
+                    <ol className="mt-2 space-y-2.5">
+                      {m.definitions.slice(0, 2).map((d, i) => (
+                        <li key={i} className="font-light">
+                          {d.definition}
+                          {d.example && <span className="mt-1 block font-serif italic text-ink-soft">&ldquo;{d.example}&rdquo;</span>}
+                        </li>
+                      ))}
+                    </ol>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </aside>
+      )}
+    </>
+  );
+}
