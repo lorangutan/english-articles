@@ -6,11 +6,14 @@ declare global {
 }
 
 function createPool() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set");
-  const host = new URL(url).hostname;
+  const raw = process.env.DATABASE_URL;
+  if (!raw) throw new Error("DATABASE_URL is not set");
+  const url = new URL(raw);
+  // TiDB's "Prisma" connection string adds sslaccept=strict, which mysql2 doesn't understand.
+  url.searchParams.delete("sslaccept");
+  const host = url.hostname;
   return mysql.createPool({
-    uri: url,
+    uri: url.toString(),
     connectionLimit: 4,
     // TiDB Cloud Serverless only accepts TLS connections.
     ssl: host.endsWith("tidbcloud.com") ? { minVersion: "TLSv1.2", rejectUnauthorized: true } : undefined,
