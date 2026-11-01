@@ -31,11 +31,11 @@ async function store(articles: RawArticle[], report: IngestReport) {
 }
 
 /** Pulls fresh articles for the given topics (default: all) and stores the new ones. */
-export async function ingest(topics: Topic[] = TOPICS, wikiPerTerm = 2): Promise<IngestReport> {
+export async function ingest(topics: Topic[] = TOPICS, wikiPerTerm = 2, { feeds = true } = {}): Promise<IngestReport> {
   const report: IngestReport = { fetched: 0, stored: 0, skipped: 0, errors: [] };
   for (const topic of topics) {
     const jobs = [
-      ...topic.feeds.map((f) => () => fetchConversation(f, topic.slug)),
+      ...(feeds ? topic.feeds : []).map((f) => () => fetchConversation(f, topic.slug)),
       // Two random search terms per run keep the beginner shelf varied.
       ...[...topic.wiki].sort(() => Math.random() - 0.5).slice(0, 2).map((term) => () => fetchSimpleWiki(term, topic.slug, wikiPerTerm)),
     ];

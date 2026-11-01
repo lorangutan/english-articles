@@ -13,7 +13,8 @@ export type RawArticle = {
   publishedAt: Date | null;
 };
 
-const UA = "FolioEnglish/0.1 (reading practice app; https://github.com/)";
+// Wikimedia asks for a descriptive User-Agent with a contact URL and throttles generic ones.
+const UA = "FolioEnglish/0.1 (https://github.com/lorangutan/english-articles; English reading practice)";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -99,7 +100,7 @@ export async function fetchSimpleWiki(search: string, topic: string, count = 4):
   const out: RawArticle[] = [];
   for (const title of titles) {
     if (/^List of|disambiguation/i.test(title)) continue;
-    await sleep(400);
+    await sleep(1000);
     // Whole-page extracts come back one page per request.
     const page = JSON.parse(
       await get(`${WIKI}&action=query&prop=extracts|info&explaintext=1&exsectionformat=wiki&inprop=url&titles=${encodeURIComponent(title)}`),
