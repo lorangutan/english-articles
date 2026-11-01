@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS saved_words (
   definition  VARCHAR(600) NULL,
   context     VARCHAR(600) NULL,
   article_id  INT UNSIGNED NULL,
+  lookups     INT UNSIGNED NOT NULL DEFAULT 0,   -- times the reader tapped this word
+  in_deck     TINYINT(1)   NOT NULL DEFAULT 0,   -- chosen for flashcards and quizzes
+  quiz_right  INT UNSIGNED NOT NULL DEFAULT 0,
+  quiz_wrong  INT UNSIGNED NOT NULL DEFAULT 0,
   created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_saved_reader_word (reader_id, word)
 );

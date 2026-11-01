@@ -6,7 +6,8 @@ import { readerId } from "@/lib/preferences";
 import { RATES, blockText, useReadAloud, voiceLabel } from "@/lib/use-read-aloud";
 
 type Active = { word: string; key: string; context: string; block: number; offset: number };
-type Lookup = { state: "loading" } | { state: "missing" } | { state: "error" } | { state: "ok"; def: Definition };
+type NoteState = { lookups: number; inDeck: boolean };
+type Lookup ={ state: "loading" } | { state: "missing" } | { state: "error" } | { state: "ok"; def: Definition };
 
 const WORD = /([A-Za-z]+(?:['’][A-Za-z]+)?)/;
 
@@ -98,15 +99,28 @@ function Player({ speech }: { speech: ReturnType<typeof useReadAloud> }) {
 export default function Reader({ blocks, articleId }: { blocks: string[]; articleId: number }) {
   const [active, setActive] = useState<Active | null>(null);
   const [lookup, setLookup] = useState<Lookup | null>(null);
-  const [saved, setSaved] = useState<Set<string>>(new Set());
+  const [notebook, setNotebook] = useState<Map<string, NoteState>>(new Map());
   const speech = useReadAloud(blocks);
 
   useEffect(() => {
     fetch("/api/words", { headers: { "X-Reader-Id": readerId() } })
       .then((r) => (r.ok ? r.json() : { words: [] }))
-      .then((d: { words: { word: string }[] }) => setSaved(new Set(d.words.map((w) => w.word))))
+      .then((d: { words: (NoteState & { word: string })[] }) =>
+        setNotebook(new Map(d.words.map((w) => [w.word, { lookups: w.lookups, inDeck: w.inDeck }]))),
+      )
       .catch(() => {});
   }, []);
+
+  const note = useCallback(async (payload: Record<string, unknown>) => {
+    const res = await fetch("/api/words", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Reader-Id": readerId() },
+      body: JSON.stringify({ ...payload, articleId }),
+    }).catch(() => null);
+    if (!res?.ok) return;
+    const saved = (await res.json()) as NoteState & { word: string };
+    setNotebook((m) => new Map(m).set(saved.word, { lookups: saved.lookups, inDeck: saved.inDeck }));
+  }, [articleId]);
 
   const close = useCallback(() => {
     setActive(null);
@@ -133,21 +147,19 @@ export default function Reader({ blocks, articleId }: { blocks: string[]; articl
       const res = await fetch(`/api/define?word=${encodeURIComponent(word)}`);
       if (res.status === 404) return setLookup({ state: "missing" });
       if (!res.ok) throw new Error();
-      setLookup({ state: "ok", def: (await res.json()) as Definition });
+      const def = (await res.json()) as Definition;
+      setLookup({ state: "ok", def });
+      // Every successful lookup goes into the reader's notebook and bumps its count.
+      note({ word: def.word, definition: def.meanings[0]?.definitions[0]?.definition, context, lookup: true });
     } catch {
       setLookup({ state: "error" });
     }
   };
 
-  const save = async (def: Definition) => {
-    const firstDefinition = def.meanings[0]?.definitions[0]?.definition;
-    setSaved((s) => new Set(s).add(def.word));
-    const res = await fetch("/api/words", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Reader-Id": readerId() },
-      body: JSON.stringify({ word: def.word, definition: firstDefinition, context: active?.context, articleId }),
-    }).catch(() => null);
-    if (!res?.ok) setSaved((s) => { const n = new Set(s); n.delete(def.word); return n; });
+  const toggleDeck = (word: string) => {
+    const inDeck = !notebook.get(word)?.inDeck;
+    setNotebook((m) => new Map(m).set(word, { lookups: m.get(word)?.lookups ?? 1, inDeck }));
+    note({ word, inDeck });
   };
 
   const readingChar = (i: number) => (speech.position?.block === i ? speech.position.char : null);
@@ -209,23 +221,33 @@ export default function Reader({ blocks, articleId }: { blocks: string[]; articl
             <button onClick={close} aria-label="Close" className="text-xl leading-none text-ink-faint hover:text-ink">×</button>
           </div>
 
-          {lookup.state === "ok" && (
-            <div className="mt-5 flex items-center justify-between">
-              {saved.has(lookup.def.word) ? (
-                <span className="text-[0.7rem] uppercase tracking-eyebrow text-gold-deep">✓ In your words</span>
-              ) : (
-                <button onClick={() => save(lookup.def)} className="btn px-5 py-2.5">Keep this word</button>
-              )}
-              <span className="flex gap-5">
-                {speech.supported && (
-                  <button onClick={() => { speech.playFrom(active.block, active.offset); close(); }} className="btn-quiet">
-                    Read from here
+          {lookup.state === "ok" && (() => {
+            const entry = notebook.get(lookup.def.word);
+            return (
+              <div className="mt-5">
+                <p className="text-xs font-light text-ink-faint">
+                  {entry ? <>In your notebook · looked up <span className="text-ink">{entry.lookups}×</span></> : "Adding to your notebook…"}
+                </p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <button
+                    onClick={() => toggleDeck(lookup.def.word)}
+                    aria-pressed={Boolean(entry?.inDeck)}
+                    className={`btn px-5 py-2.5 ${entry?.inDeck ? "bg-ink text-ivory" : ""}`}
+                  >
+                    {entry?.inDeck ? "✓ In flashcards" : "+ Flashcards"}
                   </button>
-                )}
-                <a href="/words" className="btn-quiet">My words</a>
-              </span>
-            </div>
-          )}
+                  <span className="flex gap-5">
+                    {speech.supported && (
+                      <button onClick={() => { speech.playFrom(active.block, active.offset); close(); }} className="btn-quiet">
+                        Read from here
+                      </button>
+                    )}
+                    <a href="/words" className="btn-quiet">Notebook</a>
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="mt-5 border-t hairline pt-5 text-[0.95rem] leading-relaxed">
             {lookup.state === "loading" && <p className="font-light text-ink-faint">Looking it up…</p>}

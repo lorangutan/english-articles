@@ -24,7 +24,9 @@ Runs entirely on free tiers: **Next.js on Vercel (Hobby)** + **TiDB Cloud Server
 
 **Library growth:** `npm run ingest` fills it in one go; afterwards a daily Vercel Cron (`vercel.json` → `/api/ingest`) refreshes three random topics.
 
-**Word lists** have no accounts: the browser keeps an anonymous reader id and saved words are stored against it in `saved_words`.
+**Read aloud** uses the browser's Web Speech API (free, no key) with word-by-word highlighting.
+
+**Notebook → flashcards → quiz.** Every word a reader looks up is noted in `saved_words` with a look-up count. They pick words for a flashcard deck, study them, then take a multiple-choice quiz (gap-fill from their own sentence, or meaning → word); results are stored per word and weakest words come first. No accounts: the browser keeps an anonymous reader id.
 
 ## API
 
@@ -32,7 +34,9 @@ Runs entirely on free tiers: **Next.js on Vercel (Hobby)** + **TiDB Cloud Server
 | :--- | :--- |
 | `GET /api/articles?band=1-4&topics=science,food&exclude=ids&limit=7` | Random articles for a band |
 | `GET /api/define?word=curiosity` | Definition, phonetic, audio, examples |
-| `GET / POST / DELETE /api/words` (header `X-Reader-Id`) | A reader's saved words |
+| `GET / POST / PATCH / DELETE /api/words` (header `X-Reader-Id`) | Notebook: list, note a look-up / deck change, bulk deck, remove |
+| `POST /api/words/quiz` | Record a quiz answer |
+| `GET /api/words/distractors?n=12` | Wrong-answer words for the quiz |
 | `GET /api/ingest` (header `Authorization: Bearer $CRON_SECRET`) | Pull new articles |
 
 ## Run locally

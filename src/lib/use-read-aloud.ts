@@ -204,3 +204,15 @@ export function useReadAloud(blocks: string[]) {
 
   return { supported, voices, voiceName, setVoice, rate, setRate, status, position, play, playFrom, pause, stop, speakWord };
 }
+
+/** One-off pronunciation outside the reader (flashcards), in the reader's saved voice. */
+export function sayWord(word: string) {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(word);
+  const voice = speechSynthesis.getVoices().find((v) => v.name === stored(VOICE_KEY));
+  if (voice) u.voice = voice;
+  u.lang = voice?.lang ?? "en-US";
+  u.rate = 0.85;
+  speechSynthesis.speak(u);
+}

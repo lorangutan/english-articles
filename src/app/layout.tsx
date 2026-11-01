@@ -19,9 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/" className="font-serif text-2xl tracking-tight">
             Folio<span className="text-gold">.</span>
           </Link>
-          <nav className="flex gap-7 text-[0.7rem] uppercase tracking-eyebrow text-ink-soft">
+          <nav className="flex gap-5 text-[0.7rem] sm:gap-7 uppercase tracking-eyebrow text-ink-soft">
             <Link href="/read" className="hover:text-ink">Library</Link>
-            <Link href="/words" className="hover:text-ink">My words</Link>
+            <Link href="/words" className="hover:text-ink">Notebook</Link>
+            <Link href="/practice" className="hover:text-ink">Practice</Link>
           </nav>
         </header>
         <div className="mx-auto max-w-6xl px-6 sm:px-10"><div className="border-t hairline" /></div>
