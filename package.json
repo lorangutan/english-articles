@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "db:init": "tsx --env-file-if-exists=.env.local scripts/db-init.ts",
+    "tidb:init": "tsx --env-file=.env.tidb.local scripts/db-init.ts",
+    "tidb:ingest": "tsx --env-file=.env.tidb.local scripts/ingest.ts",
     "ingest": "tsx --env-file-if-exists=.env.local scripts/ingest.ts",
     "rescore": "tsx --env-file-if-exists=.env.local scripts/rescore.ts"
   },
