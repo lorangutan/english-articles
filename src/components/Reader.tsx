@@ -199,6 +199,9 @@ export default function Reader({ blocks, articleId }: { blocks: string[]; articl
             <div>
               <p className="eyebrow">Definition</p>
               <h3 className="mt-2 font-serif text-4xl">{lookup.state === "ok" ? lookup.def.word : active.word.toLowerCase()}</h3>
+              {lookup.state === "ok" && lookup.def.formOf && (
+                <p className="mt-1 font-serif text-sm italic text-ink-soft">{lookup.def.formOf}</p>
+              )}
               {(() => {
                 const def = lookup.state === "ok" ? lookup.def : null;
                 const audio = def?.audio ?? null;

@@ -9,6 +9,8 @@ export type Definition = {
   phonetic: string | null;
   audio: string | null;
   meanings: { partOfSpeech: string; definitions: { definition: string; example: string | null }[] }[];
+  /** Set when the tapped word is an inflection, e.g. "doctors · plural of doctor". */
+  formOf?: string;
 };
 
 type ApiEntry = {
@@ -61,13 +63,29 @@ type WiktionaryEntry = { partOfSpeech: string; language: string; definitions: Wi
 
 const stripHtml = (html: string) => html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
 
-async function fetchWiktionary(word: string): Promise<Definition | null> {
+/** "plural of doctor" style senses link to their base word; returns it when every sense is one. */
+function formOfTarget(entries: WiktionaryEntry[]) {
+  const senses = entries.flatMap((e) => e.definitions).filter((d) => stripHtml(d.definition).length > 1);
+  if (!senses.length || !senses.every((d) => d.definition.includes("form-of-definition"))) return null;
+  const link = senses[0].definition.match(/form-of-definition-link[\s\S]*?title="([^"#]+)/);
+  return link ? { base: link[1], note: stripHtml(senses[0].definition) } : null;
+}
+
+async function fetchWiktionary(word: string, followForms = true): Promise<Definition | null> {
   const res = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(word)}`, {
-    headers: { "User-Agent": "FolioEnglish/0.1 (reading practice app)" },
+    headers: { "User-Agent": "FolioEnglish/0.1 (https://github.com/lorangutan/english-articles)" },
     cache: "no-store",
   });
   if (!res.ok) return null;
   const entries = ((await res.json()) as { en?: WiktionaryEntry[] }).en ?? [];
+
+  // Learners need the meaning of "doctor", not just "plural of doctor": follow the link once.
+  const form = followForms ? formOfTarget(entries) : null;
+  if (form && form.base.toLowerCase() !== word) {
+    const base = (await fetchFreeDictionary(form.base).catch(() => null)) ?? (await fetchWiktionary(form.base, false));
+    if (base) return { ...base, formOf: `${word} · ${form.note}` };
+  }
+
   const meanings = entries
     .map((e) => ({
       partOfSpeech: e.partOfSpeech.toLowerCase(),
