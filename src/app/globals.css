@@ -2,11 +2,56 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette as RGB channels so Tailwind opacity modifiers (bg-ivory/60) keep working.
+   "ivory" is always the page and "ink" the text, so dark mode only swaps the values. */
 @layer base {
+  :root {
+    color-scheme: light;
+    --ivory: 245 240 230;
+    --paper: 250 247 240;
+    --ink: 35 33 30;
+    --ink-soft: 90 86 79;
+    --ink-faint: 138 133 123;
+    --rule: 220 211 194;
+    --gold: 180 155 108;
+    --gold-deep: 125 104 68;
+    --gold-wash: 236 227 208;
+  }
+
+  /* Dark: warm charcoal, ivory type, champagne lifted for contrast. Applied when the system
+     prefers dark (unless the reader chose light), or when the reader chose dark. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ivory: 22 21 19;
+      --paper: 31 29 26;
+      --ink: 236 230 218;
+      --ink-soft: 184 176 163;
+      --ink-faint: 138 131 120;
+      --rule: 55 51 45;
+      --gold: 176 152 108;
+      --gold-deep: 208 185 141;
+      --gold-wash: 58 50 38;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ivory: 22 21 19;
+    --paper: 31 29 26;
+    --ink: 236 230 218;
+    --ink-soft: 184 176 163;
+    --ink-faint: 138 131 120;
+    --rule: 55 51 45;
+    --gold: 176 152 108;
+    --gold-deep: 208 185 141;
+    --gold-wash: 58 50 38;
+  }
+
   html { -webkit-text-size-adjust: 100%; }
-  body { @apply bg-ivory text-ink font-sans antialiased; font-weight: 400; }
-  ::selection { background: #ECE3D0; color: #23211E; }
-  :focus-visible { outline: 1px solid #7D6844; outline-offset: 3px; }
+  body { @apply bg-ivory text-ink font-sans antialiased transition-colors duration-300; font-weight: 400; }
+  ::selection { background: rgb(var(--gold-wash)); color: rgb(var(--ink)); }
+  :focus-visible { outline: 1px solid rgb(var(--gold-deep)); outline-offset: 3px; }
+  option { background: rgb(var(--paper)); color: rgb(var(--ink)); }
 }
 
 @layer components {
